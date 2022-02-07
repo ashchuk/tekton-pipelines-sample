@@ -1,0 +1,3 @@
+Host https://bitbucket.org
+    HostName https://bitbucket.org
+    User username@example.com

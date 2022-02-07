@@ -1,0 +1,170 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: sampleapp-api-pipeline
+  namespace: tekton-pipelines
+spec:
+  workspaces:
+    - name: git-source
+      description: The git repo
+    - name: git-infra-source
+      description: The infrastructure git repo
+    - name: ssh-creds
+      description: The git repo ssh auth
+    - name: ssh-write-creds
+      description: The infrastructure git repo ssh auth
+    - name: dockerconfig
+      description: The private registry config file
+    - name: sonar-settings
+      description: Sonarqube settings file
+  params:
+    - name: gitUrl
+      description: Git repository url
+    - name: branchName
+      description: App source repository branch to build an app
+      default: 'develop'
+    - name: infraGitUrl
+      description: Infrastructure git repository url
+    - name: infraBranchName
+      description: App infra source repository branch to apply CD changes
+      default: 'master'
+    - name: pathToContext
+      description: The path to the build context, used by Kaniko - within the workspace
+      default: ''
+    - name: imageUrl
+      description: Image name including repository
+    - name: imageTag
+      description: Image tag
+      default: "latest"
+    - name: sonar-url
+      description: Sonarqube URL
+      default: https://sonar.local
+    - name: sonar-project-name
+      description: Sonarqube project name
+      default: "example-app"
+
+  tasks:
+
+    - name: clone-repo
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: git-source
+        - name: ssh-directory
+          workspace: ssh-creds
+      params:
+        - name: url
+          value: "$(params.gitUrl)"
+        - name: subdirectory
+          value: "."
+        - name: revision
+          value: $(params.branchName)
+        - name: deleteExisting
+          value: "true"
+
+    - name: dotnet-test
+      taskRef:
+        name: dotnet-test
+      runAfter:
+        - clone-repo
+      workspaces:
+        - name: source
+          workspace: git-source
+      params:
+        - name: subdirectory
+          value: /src
+        - name: dotnet-image
+          value: mcr.microsoft.com/dotnet/sdk:5.0
+
+    - name: code-analysis
+      taskRef:
+        name: sonarqube-scanner
+      runAfter:
+        - clone-repo
+        - dotnet-test
+      params:
+        - name: SONAR_HOST_URL
+          value: $(params.sonar-url)
+        - name: SONAR_PROJECT_KEY
+          value: $(params.sonar-project-name)
+      workspaces:
+        - name: source-dir
+          workspace: git-source
+        - name: sonar-settings
+          workspace: sonar-settings
+
+    - name: build-and-push-image
+      taskRef:
+        name: kaniko
+      runAfter:
+        - clone-repo
+        - dotnet-test
+      workspaces:
+        - name: source
+          workspace: git-source
+        - name: dockerconfig
+          workspace: dockerconfig
+      params:
+        - name: CONTEXT
+          value: $(params.pathToContext)
+        - name: IMAGE
+          value: $(params.imageUrl):$(params.imageTag)
+
+    - name: clone-infra-repo
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: git-infra-source
+        - name: ssh-directory
+          workspace: ssh-w-creds
+      params:
+        - name: url
+          value: "$(params.infraGitUrl)"
+        - name: subdirectory
+          value: "."
+        - name: deleteExisting
+          value: "true"
+
+    - name: update-cd-image-tag
+      taskRef:
+        name: yq
+      runAfter:
+        - clone-infra-repo
+        - build-and-push-image
+      workspaces:
+        - name: source
+          workspace: git-infra-source
+      params:
+        - name: files
+          value:
+          - "./apps/sampleapp-api/values.production.yaml"
+          - "./apps/sampleapp-api/values.modified.yaml"
+        - name: expression
+          value: .image.tag = \""$(params.imageTag)"\"
+
+    - name: push-infra-updates
+      taskRef:
+        name: git-cli
+      runAfter:
+        - clone-infra-repo
+        - build-and-push-image
+        - update-cd-image-tag
+      workspaces:
+        - name: source
+          workspace: git-infra-source
+        - name: ssh-directory
+          workspace: ssh-write-creds
+      params:
+        - name: GIT_USER_NAME
+          value: John Doe
+        - name: GIT_USER_EMAIL
+          value: john.doe@example.com
+        - name: GIT_SCRIPT
+          value: |
+            git fetch origin
+            git checkout $(params.infraBranchName)
+            git add .
+            git commit -m "feat: image tag update $(params.imageUrl):$(params.imageTag)"
+            git push

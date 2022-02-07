@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: dotnet-test
+  namespace: tekton-pipelines
+  annotations:
+    description: Executes build, test, and sonarscan logic for a dotnet application
+  labels:
+    version: 0.0.1
+spec:
+  workspaces:
+    - name: source
+      description: A workspace that contains the fetched git repository.
+  params:
+    - name: subdirectory
+      default: /source
+    - name: dotnet-image
+      default: mcr.microsoft.com/dotnet/sdk:5.0
+  steps:
+    - name: build
+      image: $(params.dotnet-image)
+      workingDir: $(workspaces.source.path)/$(params.subdirectory)
+      script: |
+        dotnet restore
+        dotnet build
+    - name: test
+      image: $(params.dotnet-image)
+      workingDir: $(workspaces.source.path)/$(params.subdirectory)
+      script: |
+        dotnet test

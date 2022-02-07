@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sampleapp-api
+spec:
+  destination:
+    name: ''
+    namespace: sampleapp
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: apps/sampleapp-api
+    repoURL: 'git@bitbucket.org:username/sampleapp-infra.git'
+    targetRevision: master
+    helm:
+      valueFiles:
+        - values.production.yaml
+  project: sampleapp
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: false

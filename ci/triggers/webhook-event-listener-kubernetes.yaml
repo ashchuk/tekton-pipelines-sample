@@ -1,0 +1,111 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: sampleapp-pipeline-listener
+  namespace: tekton-pipelines
+spec:
+  serviceAccountName: pipeline-trigger-sa
+  triggers:
+    - name: sampleapp-api-pipeline-trigger
+      interceptors:
+        - cel:
+            filter: "body.pullrequest.state.contains('MERGED') && body.pullrequest.source.repository.name.contains('sampleapp-api')"
+            overlays:
+              - key: webhook_uuid
+                expression: "header.canonical('X-Hook-UUID')"
+              - key: truncated_commit_sha
+                expression: "body.pullrequest.merge_commit.hash.truncate(7)"
+              - key: commit_date
+                expression: "body.pullrequest.updated_on.truncate(10)"
+      bindings:
+        - ref: sampleapp-api-pipeline-binding
+      template:
+        ref: sampleapp-api-pipeline-template
+---
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: sampleapp-api-pipeline-binding
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      value: $(extensions.truncated_commit_sha)
+    - name: git-repository-url
+      value: $(body.repository.links.html.href)
+    - name: commit-date
+      value: $(extensions.commit_date)
+---
+
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: sampleapp-api-pipeline-template
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-revision
+      description: The git revision
+      default: master
+    - name: git-repository-url
+      description: The git repository url
+    - name: commit-date
+      description: commit date
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: triggered-sampleapp-api-pipelinerun-
+      spec:
+        pipelineRef:
+          name: sampleapp-api-pipeline
+        params:
+          - name: gitUrl
+            value: git@bitbucket.org:username/sampleapp-api.git
+          - name: infraGitUrl
+            value: git@bitbucket.org:username/sampleapp-infra.git
+          - name: branchName
+            value: master
+          - name: infraBranchName
+            value: master
+          - name: imageUrl
+            value: example.com/sampleapp/api
+          - name: imageTag
+            value: v0.0.1
+          - name: pathToContext
+            value: './src'
+          - name: sonar-url
+            value: https://sonar.local
+          - name: sonar-project-name
+            value: example-app
+        serviceAccountName: pipeline-account
+        workspaces:
+          - name: git-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+          - name: git-infra-source
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 100Mi
+          - name: ssh-creds
+            secret:
+              secretName: ssh-readonly-creds-secret
+          - name: ssh-write-creds
+            secret:
+              secretName: ssh-write-creds-secret
+          - name: dockerconfig
+            secret:
+              secretName: reg-cred
+          - name: sonar-settings
+            secret:
+              secretName: sonar-settings-secret
