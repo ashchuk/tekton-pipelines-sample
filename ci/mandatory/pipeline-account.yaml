@@ -6,6 +6,7 @@ metadata:
 secrets:
 - name: reg-cred
 - name: ssh-readonly-creds-secret
+- name: ssh-write-creds-secret
 ---
 
 apiVersion: v1
