@@ -7,17 +7,17 @@ spec:
   pipelineRef:
     name: sampleapp-api-pipeline
   params:
-    - name: gitUrl
+    - name: git-url
       value: git@bitbucket.org:username/sampleapp-api.git
-    - name: infraGitUrl
+    - name: infra-git-url
       value: git@bitbucket.org:username/sampleapp-infra.git
-    - name: branchName
+    - name: branch-name
       value: master
-    - name: infraBranchName
+    - name: infra-branch-name
       value: master
-    - name: imageUrl
+    - name: image-url
       value: example.com/sampleapp/api
-    - name: imageTag
+    - name: image-tag
       value: v0.0.1
     - name: pathToContext
       value: './src'

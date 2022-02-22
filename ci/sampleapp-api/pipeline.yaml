@@ -18,22 +18,22 @@ spec:
     - name: sonar-settings
       description: Sonarqube settings file
   params:
-    - name: gitUrl
+    - name: git-url
       description: Git repository url
-    - name: branchName
+    - name: branch-name
       description: App source repository branch to build an app
       default: 'develop'
-    - name: infraGitUrl
+    - name: infra-git-url
       description: Infrastructure git repository url
-    - name: infraBranchName
+    - name: infra-branch-name
       description: App infra source repository branch to apply CD changes
       default: 'master'
     - name: pathToContext
       description: The path to the build context, used by Kaniko - within the workspace
       default: ''
-    - name: imageUrl
+    - name: image-url
       description: Image name including repository
-    - name: imageTag
+    - name: image-tag
       description: Image tag
       default: "latest"
     - name: sonar-url
@@ -55,11 +55,11 @@ spec:
           workspace: ssh-creds
       params:
         - name: url
-          value: "$(params.gitUrl)"
+          value: "$(params.git-url)"
         - name: subdirectory
           value: "."
         - name: revision
-          value: $(params.branchName)
+          value: $(params.branch-name)
         - name: deleteExisting
           value: "true"
 
@@ -109,7 +109,7 @@ spec:
         - name: CONTEXT
           value: $(params.pathToContext)
         - name: IMAGE
-          value: $(params.imageUrl):$(params.imageTag)
+          value: $(params.image-url):$(params.image-tag)
 
     - name: clone-infra-repo
       taskRef:
@@ -121,7 +121,7 @@ spec:
           workspace: ssh-w-creds
       params:
         - name: url
-          value: "$(params.infraGitUrl)"
+          value: "$(params.infra-git-url)"
         - name: subdirectory
           value: "."
         - name: deleteExisting
@@ -142,7 +142,7 @@ spec:
           - "./apps/sampleapp-api/values.production.yaml"
           - "./apps/sampleapp-api/values.modified.yaml"
         - name: expression
-          value: .image.tag = \""$(params.imageTag)"\"
+          value: .image.tag = \""$(params.image-tag)"\"
 
     - name: push-infra-updates
       taskRef:
@@ -164,7 +164,7 @@ spec:
         - name: GIT_SCRIPT
           value: |
             git fetch origin
-            git checkout $(params.infraBranchName)
+            git checkout $(params.infra-branch-name)
             git add .
-            git commit -m "feat: image tag update $(params.imageUrl):$(params.imageTag)"
+            git commit -m "feat: image tag update $(params.image-url):$(params.image-tag)"
             git push
